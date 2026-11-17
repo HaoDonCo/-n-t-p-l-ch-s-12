@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bài 4: Chỉnh lưu dòng điện xoay chiều</title>
+  <style>
+    :root {
+      --bg-outer: #060913;
+      --bg-light: #F1F5F9;
+      --bg-dark: #0B132B;
+      --card-light: #FFFFFF;
+      --text-main: #0F172A;
+      --blue-deep: #075985;
+      --orange-deep: #9A3412;
+      --green-deep: #166534;
+      --red-deep: #991B1B;
+      --font-sans: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --font-mono: 'Consolas', 'Courier New', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-outer);
+      font-family: var(--font-sans);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+
+    /* Sân khấu chuẩn 1600x900 + Perspective cho chuyển trang 3D */
+    .stage-wrapper {
+      width: 1600px;
+      height: 900px;
+      position: relative;
+      transform-origin: center center;
+      overflow: hidden;
+      border-radius: 20px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.78);
+      background: var(--bg-light);
+      perspective: 1500px;
+    }
+
+    /* Thanh tiến trình mỏng ở mép trên */
+    .top-progress {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 6px;
+      background: rgba(148, 163, 184, 0.25);
+      z-index: 70;
+    }
+    .top-progress-fill {
+      height: 100%;
+      width: 6.25%;
+      background: linear-gradient(90deg, #38BDF8, #FBBF24, #4ADE80);
+      transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* Kiến trúc lưới 3 hàng chống tràn tuyệt đối + Đa hiệu ứng chuyển trang */
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 36px 52px 32px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 20px;
+      background: var(--bg-light);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      will-change: transform, opacity, filter;
+      transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+                  filter 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+                  visibility 0.6s;
+    }
+
+    /* 4 kiểu chuyển trang phối hợp mượt mà */
+    .slide.prev-slide { opacity: 0; transform: translateX(-100px) scale(0.92) rotateY(8deg); filter: blur(6px); }
+    .slide.next-slide { opacity: 0; transform: translateX(100px) scale(0.92) rotateY(-8deg); filter: blur(6px); }
+
+    .slide[data-fx="zoom"].prev-slide { transform: scale(1.12); filter: blur(8px); }
+    .slide[data-fx="zoom"].next-slide { transform: scale(0.86); filter: blur(8px); }
+
+    .slide[data-fx="flip"].prev-slide { transform: translateY(-75px) rotateX(10deg) scale(0.94); filter: blur(5px); }
+    .slide[data-fx="flip"].next-slide { transform: translateY(75px) rotateX(-10deg) scale(0.94); filter: blur(5px); }
+
+    .slide[data-fx="glide"].prev-slide { transform: translate(-80px, -20px) scale(0.95); filter: blur(4px); }
+    .slide[data-fx="glide"].next-slide { transform: translate(80px, 20px) scale(0.95); filter: blur(4px); }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      z-index: 10;
+      transform: translate3d(0, 0, 0) scale(1) rotateX(0) rotateY(0);
+      filter: blur(0);
+    }
+
+    .slide-dark {
+      background: linear-gradient(135deg, #0B132B 0%, #0F172A 100%);
+      color: #F8FAFC;
+    }
+
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 20px;
+      border-bottom: 2px solid rgba(148, 163, 184, 0.28);
+      padding-bottom: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 18px;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .badge-blue { background: var(--blue-deep); color: #FFFFFF; }
+    .badge-orange { background: var(--orange-deep); color: #FFFFFF; }
+    .badge-green { background: var(--green-deep); color: #FFFFFF; }
+    .badge-red { background: var(--red-deep); color: #FFFFFF; }
+    .badge-glow { background: #075985; color: #FFFFFF; border: 2px solid #38BDF8; }
+
+    /* Thang cỡ chữ siêu lớn chuẩn máy chiếu lớp học */
+    h1 {
+      font-size: 70px;
+      font-weight: 900;
+      line-height: 1.1;
+      color: #FFFFFF;
+    }
+
+    h2 {
+      font-size: 46px;
+      font-weight: 900;
+      line-height: 1.16;
+      color: #0F172A;
+    }
+    .slide-dark h2 { color: #F8FAFC; }
+
+    h3 {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.22;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    p, li, td, th {
+      font-size: 27px;
+      font-weight: 600;
+      line-height: 1.38;
+    }
+
+    .num-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      font-family: var(--font-mono);
+      font-size: 23px;
+      font-weight: 900;
+      color: #FFFFFF;
+      flex-shrink: 0;
+    }
+
+    .slide-body {
+      min-height: 0;
+      height: 100%;
+      display: grid;
+      gap: 26px;
+      align-items: stretch;
+    }
+
+    .grid-2 { grid-template-columns: 1fr 1fr; }
+    .grid-2-wide { grid-template-columns: 1.18fr 0.82fr; }
+    .grid-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .col-stack {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    /* Thẻ nội dung bố cục rõ ràng */
+    .card {
+      background: var(--card-light);
+      border: 2px solid #CBD5E1;
+      border-radius: 20px;
+      padding: 24px 28px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    .lab-card {
+      background: #0F172A;
+      border: 2.5px solid #475569;
+      border-radius: 20px;
+      padding: 22px 24px;
+      color: #F8FAFC;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 0;
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.22);
+    }
+
+    .accent-blue { border-left: 10px solid var(--blue-deep); }
+    .accent-orange { border-left: 10px solid #C2410C; }
+    .accent-green { border-left: 10px solid var(--green-deep); }
+    .accent-red { border-left: 10px solid var(--red-deep); }
+    .top-blue { border-top: 8px solid var(--blue-deep); }
+    .top-orange { border-top: 8px solid #C2410C; }
+
+    ul.clean-list {
+      padding-left: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Thanh chốt kiến thức đáy trang */
+    .note-bar {
+      background: #FFEDD5;
+      border: 2px solid #FDBA74;
+      border-left: 10px solid #C2410C;
+      border-radius: 16px;
+      padding: 14px 26px;
+      font-size: 25px;
+      font-weight: 800;
+      color: #7C2D12;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .note-bar-dark {
+      background: #1E293B;
+      border: 2px solid #475569;
+      border-left: 10px solid #38BDF8;
+      color: #E2E8F0;
+    }
+
+    /* Nút bấm tương tác lớn */
+    .btn-group { display: flex; gap: 12px; flex-shrink: 0; }
+    .lab-btn {
+      background: #1E293B;
+      color: #E2E8F0;
+      border: 2px solid #475569;
+      border-radius: 12px;
+      padding: 12px 22px;
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.22s ease;
+    }
+    .lab-btn:hover { border-color: #38BDF8; transform: translateY(-2px); }
+    .lab-btn.active { background: #C2410C; color: #FFFFFF; border-color: #FDBA74; }
+    .lab-btn.active-green { background: #166534; color: #FFFFFF; border-color: #86EFAC; }
+
+    /* Bảng số liệu */
+    .table-wrap {
+      border-radius: 18px;
+      overflow: hidden;
+      border: 2.5px solid #64748B;
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+    }
+    table { width: 100%; height: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 22px; border-bottom: 1.5px solid #CBD5E1; }
+    thead tr { background: #0F172A; color: #FFFFFF; }
+
+    .formula-box {
+      background: #0F172A;
+      color: #F8FAFC;
+      border: 3px solid #38BDF8;
+      border-radius: 18px;
+      padding: 20px 26px;
+      text-align: center;
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+    }
+
+    /* Đa hiệu ứng xuất hiện thành phần bên trong Slide */
+    .anim-up, .anim-left, .anim-right, .anim-zoom, .anim-flip {
+      opacity: 0;
+      transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .anim-up { transform: translateY(32px); }
+    .anim-left { transform: translateX(-44px); }
+    .anim-right { transform: translateX(44px); }
+    .anim-zoom { transform: scale(0.86); }
+    .anim-flip { transform: perspective(900px) rotateX(-16deg) translateY(24px); }
+
+    .slide.active .anim-up,
+    .slide.active .anim-left,
+    .slide.active .anim-right,
+    .slide.active .anim-zoom,
+    .slide.active .anim-flip {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1) rotateX(0);
+    }
+
+    .slide.active .d-1 { transition-delay: 0.08s; }
+    .slide.active .d-2 { transition-delay: 0.18s; }
+    .slide.active .d-3 { transition-delay: 0.28s; }
+    .slide.active .d-4 { transition-delay: 0.38s; }
+
+    @keyframes flowDash { to { stroke-dashoffset: -48; } }
+    @keyframes pulseGlow {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.45)); }
+      50% { filter: drop-shadow(0 0 20px rgba(250, 204, 21, 0.95)); }
+    }
+    @keyframes shakeWrong {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-10px); }
+      40%, 80% { transform: translateX(10px); }
+    }
+    @keyframes popCorrect {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+    @keyframes trophyBounce {
+      0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 0 18px rgba(250, 204, 21, 0.6)); }
+      50% { transform: translateY(-10px) scale(1.06); filter: drop-shadow(0 0 34px rgba(250, 204, 21, 0.95)); }
+    }
+
+    .animated-current { stroke-dasharray: 12 12; animation: flowDash 0.9s linear infinite; }
+    .animated-wave { stroke-dasharray: 16 8; animation: flowDash 1.2s linear infinite; }
+    .glow-bulb { animation: pulseGlow 1.6s ease-in-out infinite; }
+    .trophy-glow { animation: trophyBounce 2.2s ease-in-out infinite; }
+
+    /* Trắc nghiệm lớp học chữ cực lớn */
+    .quiz-box {
+      background: #1E293B;
+      border: 2.5px solid #475569;
+      border-radius: 22px;
+      padding: 30px 38px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 0;
+    }
+    .quiz-q { font-size: 34px; font-weight: 900; color: #FFFFFF; line-height: 1.35; }
+    .quiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; align-content: center; }
+    .quiz-opt {
+      background: #0F172A;
+      border: 2.5px solid #475569;
+      border-radius: 16px;
+      padding: 22px 26px;
+      color: #F8FAFC;
+      font-family: var(--font-sans);
+      font-size: 27px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      transition: all 0.2s ease;
+    }
+    .quiz-opt:hover:not(:disabled) { background: #334155; border-color: #38BDF8; transform: translateY(-2px); }
+    .quiz-opt.correct { background: #064E3B !important; border-color: #34D399 !important; color: #ECFDF5 !important; animation: popCorrect 0.45s ease; }
+    .quiz-opt.wrong { background: #7F1D1D !important; border-color: #F87171 !important; color: #FCA5A5 !important; text-decoration: line-through; opacity: 0.72; cursor: not-allowed; animation: shakeWrong 0.42s ease; }
+    .quiz-letter {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: #1E293B; border: 2px solid #38BDF8; color: #38BDF8;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 25px; font-weight: 900; flex-shrink: 0;
+    }
+    .quiz-opt.correct .quiz-letter { background: #10B981; border-color: #A7F3D0; color: #064E3B; }
+    .quiz-opt.wrong .quiz-letter { background: #EF4444; border-color: #FECACA; color: #FFFFFF; }
+
+    .page-counter {
+      position: absolute;
+      bottom: 20px; right: 30px;
+      z-index: 60;
+      background: rgba(15, 23, 42, 0.92);
+      border: 2px solid #38BDF8;
+      color: #F8FAFC;
+      padding: 6px 20px;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+
+    canvas.fx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; }
+  </style>
+</head>
+<body>
+
+<div class="stage-wrapper" id="stage">
+  <div class="top-progress"><div class="top-progress-fill" id="progress-fill"></div></div>
+  <canvas class="fx-canvas" id="fx-canvas"></canvas>
+  <div class="page-counter" id="page-counter">01 / 16</div>
+
+  <!-- =========================================================================
+       SLIDE 1: TRANG BÌA
+       ========================================================================= -->
+  <section class="slide slide-dark active" data-fx="zoom">
+    <div class="slide-header anim-up d-1" style="border-bottom-color:rgba(56,189,248,0.3);">
+      <div class="badge badge-glow">CHUYÊN ĐỀ VẬT LÍ 12 • KẾT NỐI TRI THỨC • BÀI 4</div>
+    </div>
+
+    <div class="slide-body grid-2-wide" style="align-items:center;">
+      <div class="col-stack anim-left d-2" style="justify-content:center;gap:26px;">
+        <h1>CHỈNH LƯU DÒNG ĐIỆN <span style="color:#38BDF8;">XOAY CHIỀU</span></h1>
+        <p style="font-size:29px;color:#CBD5E1;font-weight:600;">
+          Bản chất <strong style="color:#FBBF24;">Diode bán dẫn</strong>, mạch chỉnh lưu nửa chu kì, mạch cầu cả chu kì và bộ lọc nguồn thực tế.
+        </p>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <div style="background:#1E293B;border:2px solid #38BDF8;border-radius:14px;padding:12px 22px;font-size:23px;font-weight:800;color:#F8FAFC;">Diode (A – K)</div>
+          <div style="background:#1E293B;border:2px solid #FBBF24;border-radius:14px;padding:12px 22px;font-size:23px;font-weight:800;color:#F8FAFC;">Chỉnh Lưu 1 &amp; 4 Diode</div>
+          <div style="background:#1E293B;border:2px solid #4ADE80;border-radius:14px;padding:12px 22px;font-size:23px;font-weight:800;color:#F8FAFC;">Tụ Lọc C</div>
+        </div>
+      </div>
+
+      <div class="lab-card anim-zoom d-3" style="height:460px;padding:28px;">
+        <div style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:#7DD3FC;text-align:center;">
+          BIẾN ĐỔI SÓNG AC ➔ DC
+        </div>
+        <svg viewBox="0 0 600 220" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <rect x="8" y="25" width="186" height="170" rx="16" fill="#1E293B" stroke="#38BDF8" stroke-width="3"/>
+          <text x="101" y="60" text-anchor="middle" fill="#7DD3FC" font-size="21" font-weight="900">VÀO AC (~)</text>
+          <line x1="26" y1="128" x2="176" y2="128" stroke="#475569" stroke-width="2" stroke-dasharray="5 5"/>
+          <path class="animated-wave" d="M 26 128 Q 63 65 101 128 T 176 128" fill="none" stroke="#38BDF8" stroke-width="5.5"/>
+
+          <line x1="200" y1="110" x2="235" y2="110" stroke="#FBBF24" stroke-width="5"/>
+          <polygon points="235,101 253,110 235,119" fill="#FBBF24"/>
+
+          <rect x="256" y="42" width="90" height="136" rx="16" fill="#9A3412" stroke="#FDBA74" stroke-width="3"/>
+          <polygon points="282,82 282,126 318,104" fill="#FFFFFF"/>
+          <line x1="322" y1="80" x2="322" y2="128" stroke="#FFFFFF" stroke-width="5.5"/>
+          <text x="301" y="158" text-anchor="middle" fill="#FFEDD5" font-size="20" font-weight="900">DIODE</text>
+
+          <line x1="352" y1="110" x2="387" y2="110" stroke="#4ADE80" stroke-width="5"/>
+          <polygon points="387,101 405,110 387,119" fill="#4ADE80"/>
+
+          <rect x="408" y="25" width="186" height="170" rx="16" fill="#1E293B" stroke="#4ADE80" stroke-width="3"/>
+          <text x="501" y="60" text-anchor="middle" fill="#86EFAC" font-size="21" font-weight="900">RA DC (+)</text>
+          <line x1="426" y1="148" x2="576" y2="148" stroke="#475569" stroke-width="2" stroke-dasharray="5 5"/>
+          <path class="animated-wave" d="M 426 148 Q 463 82 501 148 Q 538 82 576 148" fill="none" stroke="#4ADE80" stroke-width="5.5"/>
+        </svg>
+        <div style="background:#1E293B;border:2px solid #475569;border-radius:12px;padding:12px 16px;text-align:center;font-size:22px;font-weight:800;color:#FDE047;">
+          Điện lưới 220 V (50 Hz) ➔ Chỉnh lưu ➔ Thiết bị DC
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar note-bar-dark anim-up d-4">
+      <span>Chuyên đề học tập Vật lí 12 – Kết nối tri thức với cuộc sống (Trang 19 – 25)</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 2: MỤC TIÊU TRỌNG TÂM
+       ========================================================================= -->
+  <section class="slide" data-fx="slide3d">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-blue">MỤC TIÊU TRỌNG TÂM</div>
+        <h2>4 mục tiêu cốt lõi cần nắm vững</h2>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2x2">
+      <div class="card accent-blue anim-left d-1">
+        <h3 style="color:var(--blue-deep);"><span class="num-pill" style="background:var(--blue-deep);">1</span> Diode bán dẫn</h3>
+        <ul class="clean-list">
+          <li>Nhận biết hai cực <strong>Anode (A) – Cathode (K)</strong>.</li>
+          <li>Hiểu tính dẫn điện <strong>một chiều</strong> khi mắc thuận/ngược.</li>
+        </ul>
+      </div>
+
+      <div class="card accent-orange anim-right d-2">
+        <h3 style="color:var(--orange-deep);"><span class="num-pill" style="background:#C2410C;">2</span> Đặc trưng <i>I – U</i></h3>
+        <ul class="clean-list">
+          <li>Đọc đồ thị <strong>Vôn – Ampe</strong> từ Bảng 4.1 SGK.</li>
+          <li>Nắm rõ ngưỡng mở (~0,6 V) và tính phi tuyến.</li>
+        </ul>
+      </div>
+
+      <div class="card accent-green anim-left d-3">
+        <h3 style="color:var(--green-deep);"><span class="num-pill" style="background:var(--green-deep);">3</span> Hai mạch chỉnh lưu</h3>
+        <ul class="clean-list">
+          <li><strong>Nửa chu kì (1 Diode):</strong> cắt nửa chu kì âm.</li>
+          <li><strong>Cả chu kì (cầu 4 Diode):</strong> đảo nửa âm thành dương.</li>
+        </ul>
+      </div>
+
+      <div class="card accent-red anim-right d-4">
+        <h3 style="color:var(--red-deep);"><span class="num-pill" style="background:var(--red-deep);">4</span> Lọc phẳng &amp; Ứng dụng</h3>
+        <ul class="clean-list">
+          <li>Giải thích vai trò <strong>tụ lọc C</strong> mắc song song tải.</li>
+          <li>Phân tích sơ đồ bộ sạc 220 V AC ➔ 5 V DC.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Trọng tâm: Hiểu cơ chế "van một chiều" của Diode để biến đổi sóng AC thành DC.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 3: KHỞI ĐỘNG - VÌ SAO PHẢI CHỈNH LƯU?
+       ========================================================================= -->
+  <section class="slide" data-fx="flip">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-orange">KHỞI ĐỘNG • THỰC TIỄN</div>
+        <h2>Vì sao phải chỉnh lưu dòng điện xoay chiều?</h2>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2">
+      <div class="card top-blue anim-left d-2" style="justify-content:space-between;">
+        <div>
+          <h3 style="color:var(--blue-deep);"><span class="num-pill" style="background:var(--blue-deep);">AC</span> Điện lưới: Xoay chiều</h3>
+          <ul class="clean-list" style="margin-top:14px;">
+            <li>Tần số <strong>50 Hz</strong>: đổi chiều 100 lần mỗi giây.</li>
+            <li>Dễ tăng – hạ áp bằng máy biến áp khi truyền tải xa.</li>
+          </ul>
+        </div>
+        <div style="background:#E0F2FE;border:2px solid #7DD3FC;border-radius:14px;padding:16px 22px;font-size:24px;font-weight:800;color:var(--blue-deep);">
+          Cực (+) và (–) đảo liên tục theo thời gian
+        </div>
+      </div>
+
+      <div class="card top-orange anim-right d-3" style="justify-content:space-between;">
+        <div>
+          <h3 style="color:var(--orange-deep);"><span class="num-pill" style="background:#C2410C;">DC</span> Thiết bị điện tử: Một chiều</h3>
+          <ul class="clean-list" style="margin-top:14px;">
+            <li>Điện thoại, laptop, tivi, đèn LED cần <strong>nguồn DC</strong>.</li>
+            <li>Bắt buộc phải có hai cực (+) và (–) cố định.</li>
+          </ul>
+        </div>
+        <div style="background:#FFEDD5;border:2px solid #FDBA74;border-radius:14px;padding:16px 22px;font-size:24px;font-weight:800;color:var(--orange-deep);">
+          Cần mạch chỉnh lưu chuyển AC ➔ DC
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Chỉnh lưu dòng điện là quá trình biến đổi dòng điện xoay chiều (AC) thành một chiều (DC).</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 4: I.1. DIODE BÁN DẪN & KÍ HIỆU
+       ========================================================================= -->
+  <section class="slide" data-fx="glide">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-blue">I. DIODE BÁN DẪN • HÌNH 4.1 SGK</div>
+        <h2>Cấu tạo và Kí hiệu Diode bán dẫn</h2>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2">
+      <div class="col-stack">
+        <div class="card accent-blue anim-left d-2">
+          <h3 style="color:var(--blue-deep);">Khái niệm &amp; Lớp chuyển tiếp <i>p – n</i></h3>
+          <ul class="clean-list">
+            <li>Linh kiện chỉ cho dòng điện đi qua <strong>một chiều</strong>.</li>
+            <li>Cấu tạo gồm lớp <strong>chuyển tiếp <i>p – n</i></strong> bán dẫn.</li>
+          </ul>
+        </div>
+
+        <div class="card accent-orange anim-left d-3">
+          <h3 style="color:var(--orange-deep);">Hai cực Anode (A) &amp; Cathode (K)</h3>
+          <ul class="clean-list">
+            <li><strong>Anode (A):</strong> nối miền <i>p</i> (đáy tam giác kí hiệu).</li>
+            <li><strong>Cathode (K):</strong> nối miền <i>n</i> (đầu có <strong>vạch bạc</strong>).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="lab-card anim-zoom d-3">
+        <div style="font-family:var(--font-mono);font-size:20px;font-weight:800;color:#7DD3FC;text-align:center;">
+          DIODE THỰC TẾ &amp; KÍ HIỆU MẠCH ĐIỆN
+        </div>
+        <svg viewBox="0 0 600 320" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <text x="145" y="34" text-anchor="middle" fill="#FBBF24" font-size="22" font-weight="900">a) Thực tế</text>
+          <line x1="145" y1="54" x2="145" y2="265" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+          <rect x="96" y="96" width="98" height="126" rx="12" fill="#1E293B" stroke="#E2E8F0" stroke-width="3"/>
+          <rect x="96" y="96" width="98" height="30" rx="4" fill="#CBD5E1"/>
+          <text x="145" y="174" text-anchor="middle" fill="#F8FAFC" font-family="monospace" font-size="23" font-weight="900">i-I540</text>
+          <rect x="20" y="92" width="56" height="38" rx="8" fill="#1E293B" stroke="#38BDF8" stroke-width="2.5"/>
+          <text x="48" y="119" text-anchor="middle" fill="#38BDF8" font-size="22" font-weight="900">K</text>
+          <rect x="20" y="185" width="56" height="38" rx="8" fill="#1E293B" stroke="#FBBF24" stroke-width="2.5"/>
+          <text x="48" y="212" text-anchor="middle" fill="#FBBF24" font-size="22" font-weight="900">A</text>
+          <text x="145" y="300" text-anchor="middle" fill="#CBD5E1" font-size="20" font-weight="800">Vạch bạc = Cathode (K)</text>
+
+          <line x1="295" y1="25" x2="295" y2="295" stroke="#334155" stroke-width="2.5" stroke-dasharray="7 7"/>
+
+          <text x="450" y="34" text-anchor="middle" fill="#4ADE80" font-size="22" font-weight="900">b) Kí hiệu</text>
+          <line x1="388" y1="54" x2="388" y2="265" stroke="#F8FAFC" stroke-width="6"/>
+          <line x1="338" y1="112" x2="438" y2="112" stroke="#38BDF8" stroke-width="8" stroke-linecap="round"/>
+          <polygon points="388,116 338,198 438,198" fill="#9A3412" stroke="#FDBA74" stroke-width="4.5"/>
+
+          <rect x="454" y="92" width="136" height="42" rx="8" fill="#1E293B" stroke="#38BDF8" stroke-width="2.5"/>
+          <text x="522" y="120" text-anchor="middle" fill="#38BDF8" font-size="20" font-weight="900">Cathode (K)</text>
+          <rect x="454" y="176" width="136" height="42" rx="8" fill="#1E293B" stroke="#FBBF24" stroke-width="2.5"/>
+          <text x="522" y="204" text-anchor="middle" fill="#FBBF24" font-size="20" font-weight="900">Anode (A)</text>
+
+          <text x="450" y="300" text-anchor="middle" fill="#86EFAC" font-size="20" font-weight="900">Chiều thuận: A ➔ K</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Mẹo nhớ nhanh: Đỉnh tam giác kí hiệu Diode luôn chỉ theo chiều dòng điện thuận từ A sang K.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 5: I.2. MÔ PHỎNG TƯƠNG TÁC PHÂN CỰC THUẬN & NGƯỢC
+       ========================================================================= -->
+  <section class="slide" data-fx="zoom">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-green">MÔ PHỎNG TƯƠNG TÁC • HÌNH 4.2 SGK</div>
+        <h2>Phân cực thuận và Phân cực ngược</h2>
+      </div>
+      <div class="btn-group">
+        <button id="btn-bias-fwd" class="lab-btn active-green" onclick="setBiasMode(true)">Mắc thuận: A(+) K(–)</button>
+        <button id="btn-bias-rev" class="lab-btn" onclick="setBiasMode(false)">Mắc ngược: K(+) A(–)</button>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2-wide">
+      <div class="lab-card anim-zoom d-2">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span id="bias-title" style="font-family:var(--font-mono);font-size:20px;font-weight:800;color:#4ADE80;">
+            PHÂN CỰC THUẬN: A NỐI (+), K NỐI (–)
+          </span>
+          <span id="bias-pill" style="background:#166534;color:#DCFCE7;padding:6px 18px;border-radius:999px;font-size:20px;font-weight:900;">
+            ĐÈN SÁNG
+          </span>
+        </div>
+
+        <svg viewBox="0 0 560 270" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <rect x="80" y="55" width="400" height="165" rx="14" fill="none" stroke="#475569" stroke-width="5"/>
+          <rect id="bias-flow" class="animated-current" x="80" y="55" width="400" height="165" rx="14" fill="none" stroke="#FBBF24" stroke-width="6"/>
+
+          <rect x="55" y="108" width="50" height="58" fill="#0F172A"/>
+          <line x1="56" y1="122" x2="104" y2="122" stroke="#FBBF24" stroke-width="6"/>
+          <line x1="68" y1="150" x2="92" y2="150" stroke="#38BDF8" stroke-width="6"/>
+          <text id="bias-pole-top" x="32" y="131" text-anchor="middle" fill="#FBBF24" font-size="28" font-weight="900">+</text>
+          <text id="bias-pole-bot" x="32" y="159" text-anchor="middle" fill="#38BDF8" font-size="30" font-weight="900">–</text>
+
+          <rect x="218" y="28" width="124" height="54" fill="#0F172A"/>
+          <polygon id="bias-tri" points="246,34 246,76 298,55" fill="#4ADE80" stroke="#DCFCE7" stroke-width="3"/>
+          <line x1="302" y1="32" x2="302" y2="78" stroke="#F8FAFC" stroke-width="6"/>
+          <text x="224" y="42" text-anchor="middle" fill="#FBBF24" font-size="22" font-weight="900">A</text>
+          <text x="328" y="42" text-anchor="middle" fill="#38BDF8" font-size="22" font-weight="900">K</text>
+
+          <g id="bias-bulb-g" class="glow-bulb">
+            <circle id="bias-bulb-c" cx="480" cy="138" r="34" fill="#FACC15" stroke="#FEF08A" stroke-width="4.5"/>
+            <line x1="458" y1="116" x2="502" y2="160" stroke="#7C2D12" stroke-width="4.5"/>
+            <line x1="502" y1="116" x2="458" y2="160" stroke="#7C2D12" stroke-width="4.5"/>
+          </g>
+
+          <rect id="bias-box" x="130" y="112" width="300" height="52" rx="12" fill="#1E293B" stroke="#4ADE80" stroke-width="2.5"/>
+          <text id="bias-msg-fwd" x="280" y="145" text-anchor="middle" fill="#86EFAC" font-size="21" font-weight="900">
+            Dòng thuận chạy qua (<tspan font-style="italic">I</tspan><tspan baseline-shift="sub" font-size="75%">th</tspan> &gt; 0)
+          </text>
+          <text id="bias-msg-rev" x="280" y="145" text-anchor="middle" fill="#FCA5A5" font-size="21" font-weight="900" style="display:none;">
+            Dòng ngược cực nhỏ (<tspan font-style="italic">I</tspan><tspan baseline-shift="sub" font-size="75%">ng</tspan> ≈ 0)
+          </text>
+        </svg>
+      </div>
+
+      <div class="col-stack">
+        <div class="card accent-green anim-right d-2">
+          <h3 style="color:var(--green-deep);">Phân cực thuận (ĐÓNG)</h3>
+          <ul class="clean-list">
+            <li>Mắc <strong>A ➔ (+)</strong> và <strong>K ➔ (–)</strong>.</li>
+            <li>Cho dòng điện chạy qua, <strong>đèn sáng</strong>.</li>
+          </ul>
+        </div>
+
+        <div class="card accent-red anim-right d-3">
+          <h3 style="color:var(--red-deep);">Phân cực ngược (MỞ)</h3>
+          <ul class="clean-list">
+            <li>Mắc <strong>K ➔ (+)</strong> và <strong>A ➔ (–)</strong>.</li>
+            <li>Dòng ngược ≈ 0, <strong>đèn không sáng</strong>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Bấm 2 nút phía trên để đảo cực nguồn và quan sát tính dẫn điện một chiều của Diode.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 6: I.3. ĐƯỜNG ĐẶC TRƯNG I - U & BẢNG 4.1 SGK
+       ========================================================================= -->
+  <section class="slide" data-fx="slide3d">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-orange">I. DIODE BÁN DẪN • HÌNH 4.3 &amp; BẢNG 4.1 SGK</div>
+        <h2>Đường đặc trưng <i>I – U</i> của Diode bán dẫn</h2>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2-wide">
+      <div class="lab-card anim-left d-2">
+        <svg viewBox="0 0 560 320" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <line x1="35" y1="215" x2="520" y2="215" stroke="#64748B" stroke-width="3"/>
+          <polygon points="520,208 536,215 520,222" fill="#64748B"/>
+          <line x1="250" y1="305" x2="250" y2="22" stroke="#64748B" stroke-width="3"/>
+          <polygon points="243,26 250,10 257,26" fill="#64748B"/>
+
+          <text x="268" y="34" fill="#F8FAFC" font-size="22" font-weight="900"><tspan font-style="italic">I</tspan> (mA)</text>
+          <text x="455" y="198" fill="#F8FAFC" font-size="22" font-weight="900"><tspan font-style="italic">U</tspan> (V)</text>
+          <text x="230" y="242" fill="#CBD5E1" font-size="21" font-weight="900">0</text>
+
+          <path d="M 250 215 Q 325 213 350 186 Q 378 145 415 32" fill="none" stroke="rgba(74,222,128,0.28)" stroke-width="12"/>
+          <path class="animated-wave" d="M 250 215 Q 325 213 350 186 Q 378 145 415 32" fill="none" stroke="#4ADE80" stroke-width="5.5"/>
+
+          <line x1="350" y1="186" x2="350" y2="222" stroke="#FBBF24" stroke-width="2.5" stroke-dasharray="5 5"/>
+          <text x="350" y="250" text-anchor="middle" fill="#FBBF24" font-size="20" font-weight="900">
+            <tspan font-style="italic">U</tspan><tspan baseline-shift="sub" font-size="75%">mở</tspan> ≈ 0,6 V
+          </text>
+          <text x="425" y="95" fill="#86EFAC" font-size="21" font-weight="900">Dòng thuận tăng vọt</text>
+
+          <path d="M 250 215 L 52 222" fill="none" stroke="#F87171" stroke-width="5.5"/>
+          <text x="142" y="256" text-anchor="middle" fill="#FCA5A5" font-size="20" font-weight="900">
+            Dòng ngược (<tspan font-style="italic">I</tspan><tspan baseline-shift="sub" font-size="75%">ng</tspan> ≈ 0)
+          </text>
+        </svg>
+      </div>
+
+      <div class="col-stack">
+        <div class="table-wrap anim-right d-2">
+          <table>
+            <thead>
+              <tr>
+                <th>Chế độ</th>
+                <th style="text-align:center;"><i>U</i> (V)</th>
+                <th style="text-align:center;"><i>I</i> (mA)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight:800;color:var(--red-deep);">Ngược</td>
+                <td style="text-align:center;">−5 đến −1</td>
+                <td style="text-align:center;font-weight:900;color:var(--red-deep);">0,0</td>
+              </tr>
+              <tr>
+                <td style="font-weight:800;color:var(--blue-deep);">Thuận</td>
+                <td style="text-align:center;">0,40</td>
+                <td style="text-align:center;">0,0</td>
+              </tr>
+              <tr style="background:#FFEDD5;">
+                <td style="font-weight:800;color:var(--orange-deep);">Ngưỡng mở</td>
+                <td style="text-align:center;font-weight:900;">0,60</td>
+                <td style="text-align:center;font-weight:900;">1,0</td>
+              </tr>
+              <tr>
+                <td style="font-weight:800;color:var(--green-deep);">Dẫn mạnh</td>
+                <td style="text-align:center;font-weight:900;">0,92</td>
+                <td style="text-align:center;font-weight:900;color:var(--green-deep);">150,0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card accent-red anim-flip d-3" style="padding:18px 24px;">
+          <p style="font-weight:800;color:var(--red-deep);">
+            Đường đặc trưng <i>I – U</i> là đường <strong>phi tuyến</strong> (không tuân theo định luật Ohm).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Bảng 4.1 SGK: Khi <i>U</i><sub>thuận</sub> ≥ 0,6 V, dòng điện tăng rất nhanh; khi phân cực ngược, <i>I</i> = 0.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 7: II.1. CHỈNH LƯU NỬA CHU KÌ (1 DIODE) - MÔ PHỎNG TƯƠNG TÁC
+       ========================================================================= -->
+  <section class="slide" data-fx="flip">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-blue">II. CHỈNH LƯU • 1. NỬA CHU KÌ (HÌNH 4.6 – 4.7 SGK)</div>
+        <h2>Chỉnh lưu nửa chu kì dùng 1 Diode</h2>
+      </div>
+      <div class="btn-group">
+        <button id="btn-half-1" class="lab-btn active-green" onclick="setHalfCycle(1)">Nửa chu kì dương (D dẫn)</button>
+        <button id="btn-half-2" class="lab-btn" onclick="setHalfCycle(2)">Nửa chu kì âm (D khóa)</button>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2">
+      <div class="lab-card anim-left d-2">
+        <div id="half-title" style="font-family:var(--font-mono);font-size:20px;font-weight:800;color:#4ADE80;">
+          NỬA CHU KÌ DƯƠNG: DIODE PHÂN CỰC THUẬN
+        </div>
+        <svg viewBox="0 0 540 265" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <rect x="85" y="55" width="370" height="155" rx="14" fill="none" stroke="#475569" stroke-width="5"/>
+          <rect id="half-flow" class="animated-current" x="85" y="55" width="370" height="155" rx="14" fill="none" stroke="#FBBF24" stroke-width="6"/>
+
+          <circle cx="85" cy="132" r="28" fill="#1E293B" stroke="#38BDF8" stroke-width="4"/>
+          <path d="M 66 132 Q 75 114 85 132 T 104 132" fill="none" stroke="#38BDF8" stroke-width="3.5"/>
+          <text id="half-p1" x="85" y="38" text-anchor="middle" fill="#FBBF24" font-size="26" font-weight="900">+</text>
+          <text id="half-p2" x="85" y="238" text-anchor="middle" fill="#38BDF8" font-size="28" font-weight="900">–</text>
+
+          <rect x="225" y="30" width="90" height="50" fill="#0F172A"/>
+          <polygon id="half-diode" points="242,35 242,75 288,55" fill="#4ADE80"/>
+          <line x1="292" y1="33" x2="292" y2="77" stroke="#F8FAFC" stroke-width="6"/>
+          <text x="270" y="22" text-anchor="middle" fill="#FDE047" font-size="21" font-weight="900">D</text>
+
+          <rect x="434" y="92" width="42" height="80" rx="8" fill="#FFF7ED" stroke="#EA580C" stroke-width="4"/>
+          <text x="455" y="140" text-anchor="middle" fill="#9A3412" font-size="26" font-weight="900" font-style="italic">R</text>
+
+          <rect x="130" y="106" width="280" height="52" rx="12" fill="#1E293B" stroke="#475569" stroke-width="2"/>
+          <text id="half-msg" x="270" y="139" text-anchor="middle" fill="#86EFAC" font-size="21" font-weight="900">
+            Có dòng điện chạy qua tải R
+          </text>
+        </svg>
+      </div>
+
+      <div class="col-stack">
+        <div class="lab-card anim-right d-2" style="padding:18px 22px;">
+          <div style="font-family:var(--font-mono);font-size:19px;font-weight:800;color:#FDE047;margin-bottom:6px;">
+            DẠNG SÓNG VÀO <i>u</i>(<i>t</i>) VÀ SÓNG RA <i>u</i><sub>R</sub>(<i>t</i>)
+          </div>
+          <svg viewBox="0 0 520 210" width="100%" height="190" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="22" fill="#7DD3FC" font-size="19" font-weight="800">
+              <tspan font-style="italic">u</tspan><tspan baseline-shift="sub" font-size="75%">vào</tspan> (AC)
+            </text>
+            <line x1="15" y1="62" x2="500" y2="62" stroke="#64748B" stroke-width="2" stroke-dasharray="4 4"/>
+            <path d="M 15 62 Q 70 12 125 62 T 235 62 T 345 62 T 455 62" fill="none" stroke="#38BDF8" stroke-width="4.5"/>
+
+            <text x="10" y="128" fill="#FBBF24" font-size="19" font-weight="800">
+              <tspan font-style="italic">u</tspan><tspan baseline-shift="sub" font-size="75%">R</tspan> (Chỉnh lưu nửa chu kì)
+            </text>
+            <line x1="15" y1="184" x2="500" y2="184" stroke="#64748B" stroke-width="2" stroke-dasharray="4 4"/>
+            <path class="animated-wave" d="M 15 184 Q 70 130 125 184 L 235 184 Q 290 130 345 184 L 455 184" fill="none" stroke="#FBBF24" stroke-width="5.5"/>
+            <text x="180" y="170" text-anchor="middle" fill="#FCA5A5" font-size="18" font-weight="800">Ngắt (<tspan font-style="italic">u</tspan><tspan baseline-shift="sub" font-size="75%">R</tspan> = 0)</text>
+            <text x="400" y="170" text-anchor="middle" fill="#FCA5A5" font-size="18" font-weight="800">Ngắt (<tspan font-style="italic">u</tspan><tspan baseline-shift="sub" font-size="75%">R</tspan> = 0)</text>
+          </svg>
+        </div>
+
+        <div class="card accent-orange anim-up d-3" style="padding:18px 24px;">
+          <ul class="clean-list">
+            <li>Chỉ dẫn ở <strong>nửa chu kì thuận</strong>; nửa âm bị khóa.</li>
+            <li>Dòng ra <strong>một chiều ngắt quãng</strong>, tần số <i>f'</i> = <i>f</i>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Hạn chế: Bỏ phí nửa chu kì âm nên hiệu suất thấp và điện áp ra bị ngắt quãng.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 8: II.2. CẤU TẠO MẠCH CẦU CHỈNH LƯU 4 DIODE
+       ========================================================================= -->
+  <section class="slide" data-fx="glide">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-orange">II. CHỈNH LƯU • 2. CẢ CHU KÌ (HÌNH 4.8 SGK)</div>
+        <h2>Cấu tạo mạch cầu chỉnh lưu 4 Diode</h2>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2">
+      <div class="col-stack">
+        <div class="card accent-orange anim-left d-2">
+          <h3 style="color:var(--orange-deep);">Sơ đồ cầu 4 Diode</h3>
+          <ul class="clean-list">
+            <li>Gồm <strong>4 Diode (D<sub>1</sub>, D<sub>2</sub>, D<sub>3</sub>, D<sub>4</sub>)</strong> mắc hình thoi.</li>
+            <li>Đỉnh <strong>(1) – (3)</strong> nối nguồn AC; đỉnh <strong>(2) – (4)</strong> nối tải <i>R</i>.</li>
+          </ul>
+        </div>
+
+        <div class="card accent-green anim-left d-3">
+          <h3 style="color:var(--green-deep);">Cực tính đầu ra cố định</h3>
+          <ul class="clean-list">
+            <li>Đỉnh <strong>(2)</strong> chung 2 Cathode (K) ➔ luôn là <strong>cực (+)</strong>.</li>
+            <li>Đỉnh <strong>(4)</strong> chung 2 Anode (A) ➔ luôn là <strong>cực (–)</strong>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="lab-card anim-zoom d-3">
+        <div style="font-family:var(--font-mono);font-size:20px;font-weight:800;color:#7DD3FC;text-align:center;">
+          HÌNH 4.8 SGK: CẦU CHỈNH LƯU 4 DIODE
+        </div>
+        <svg viewBox="0 0 500 280" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <circle cx="52" cy="140" r="26" fill="#1E293B" stroke="#38BDF8" stroke-width="3.5"/>
+          <path d="M 38 140 Q 45 125 52 140 T 66 140" fill="none" stroke="#38BDF8" stroke-width="3"/>
+          <polyline points="52,114 52,38 220,38" fill="none" stroke="#94A3B8" stroke-width="4.5"/>
+          <polyline points="52,166 52,242 220,242" fill="none" stroke="#94A3B8" stroke-width="4.5"/>
+
+          <line x1="220" y1="38" x2="325" y2="140" stroke="#FDBA74" stroke-width="5"/>
+          <line x1="115" y1="140" x2="220" y2="38" stroke="#7DD3FC" stroke-width="5"/>
+          <line x1="220" y1="242" x2="325" y2="140" stroke="#7DD3FC" stroke-width="5"/>
+          <line x1="115" y1="140" x2="220" y2="242" stroke="#FDBA74" stroke-width="5"/>
+
+          <circle cx="272" cy="89" r="23" fill="#9A3412" stroke="#FDBA74" stroke-width="3"/>
+          <text x="272" y="96" text-anchor="middle" fill="#FFFFFF" font-size="20" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">1</tspan></text>
+
+          <circle cx="168" cy="89" r="23" fill="#075985" stroke="#7DD3FC" stroke-width="3"/>
+          <text x="168" y="96" text-anchor="middle" fill="#FFFFFF" font-size="20" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">4</tspan></text>
+
+          <circle cx="272" cy="191" r="23" fill="#075985" stroke="#7DD3FC" stroke-width="3"/>
+          <text x="272" y="198" text-anchor="middle" fill="#FFFFFF" font-size="20" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">2</tspan></text>
+
+          <circle cx="168" cy="191" r="23" fill="#9A3412" stroke="#FDBA74" stroke-width="3"/>
+          <text x="168" y="198" text-anchor="middle" fill="#FFFFFF" font-size="20" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">3</tspan></text>
+
+          <circle cx="220" cy="38" r="7" fill="#FFFFFF"/>
+          <text x="220" y="22" text-anchor="middle" fill="#7DD3FC" font-size="20" font-weight="900">(1)</text>
+          <circle cx="325" cy="140" r="7" fill="#FFFFFF"/>
+          <text x="358" y="128" text-anchor="middle" fill="#FBBF24" font-size="21" font-weight="900">(2) +</text>
+          <circle cx="220" cy="242" r="7" fill="#FFFFFF"/>
+          <text x="220" y="269" text-anchor="middle" fill="#7DD3FC" font-size="20" font-weight="900">(3)</text>
+          <circle cx="115" cy="140" r="7" fill="#FFFFFF"/>
+          <text x="80" y="128" text-anchor="middle" fill="#38BDF8" font-size="21" font-weight="900">– (4)</text>
+
+          <polyline points="325,140 448,140 448,215 115,215 115,140" fill="none" stroke="#4ADE80" stroke-width="4.5"/>
+          <rect x="428" y="152" width="42" height="52" rx="8" fill="#FFF7ED" stroke="#EA580C" stroke-width="3.5"/>
+          <text x="449" y="186" text-anchor="middle" fill="#9A3412" font-size="24" font-weight="900" font-style="italic">R</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Dù nguồn AC đổi chiều, hiệu điện thế giữa đỉnh (2) và (4) luôn giữ giá trị dương.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 9: II.2. MÔ PHỎNG TƯƠNG TÁC MẠCH CẦU 4 DIODE
+       ========================================================================= -->
+  <section class="slide" data-fx="zoom">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-green">MÔ PHỎNG TƯƠNG TÁC • NGUYÊN LÍ MẠCH CẦU</div>
+        <h2>Hoạt động của mạch cầu trong hai nửa chu kì</h2>
+      </div>
+      <div class="btn-group">
+        <button id="btn-br-1" class="lab-btn active" onclick="setBridgeCycle(1)">Nửa chu kì 1 (D₁, D₃ dẫn)</button>
+        <button id="btn-br-2" class="lab-btn" onclick="setBridgeCycle(2)">Nửa chu kì 2 (D₂, D₄ dẫn)</button>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2-wide">
+      <div class="lab-card anim-zoom d-2">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span id="br-title" style="font-family:var(--font-mono);font-size:20px;font-weight:800;color:#FBBF24;">
+            NỬA CHU KÌ 1: (1)+ • (3)– ➔ D₁ &amp; D₃ DẪN
+          </span>
+          <span style="background:#166534;color:#DCFCE7;padding:6px 16px;border-radius:999px;font-size:19px;font-weight:900;">
+            Qua <i>R</i> cùng 1 chiều
+          </span>
+        </div>
+
+        <svg viewBox="0 0 560 270" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+          <circle cx="55" cy="135" r="26" fill="#1E293B" stroke="#38BDF8" stroke-width="4"/>
+          <path d="M 40 135 Q 47 120 55 135 T 70 135" fill="none" stroke="#38BDF8" stroke-width="3.5"/>
+          <text id="br-s1" x="55" y="92" text-anchor="middle" fill="#FBBF24" font-size="28" font-weight="900">+</text>
+          <text id="br-s2" x="55" y="194" text-anchor="middle" fill="#38BDF8" font-size="30" font-weight="900">–</text>
+
+          <polyline points="55,109 55,34 230,34" fill="none" stroke="#475569" stroke-width="4.5"/>
+          <polyline points="55,161 55,236 230,236" fill="none" stroke="#475569" stroke-width="4.5"/>
+          <line x1="230" y1="34" x2="335" y2="135" stroke="#475569" stroke-width="5"/>
+          <line x1="125" y1="135" x2="230" y2="34" stroke="#475569" stroke-width="5"/>
+          <line x1="230" y1="236" x2="335" y2="135" stroke="#475569" stroke-width="5"/>
+          <line x1="125" y1="135" x2="230" y2="236" stroke="#475569" stroke-width="5"/>
+          <polyline points="335,135 485,135 485,205 125,205 125,135" fill="none" stroke="#475569" stroke-width="4.5"/>
+
+          <polyline id="br-flow-1" class="animated-current" points="55,109 55,34 230,34 335,135 485,135 485,205 125,205 125,135 230,236 55,236 55,161" fill="none" stroke="#FBBF24" stroke-width="6"/>
+          <polyline id="br-flow-2" class="animated-current" style="display:none;" points="55,161 55,236 230,236 335,135 485,135 485,205 125,205 125,135 230,34 55,34 55,109" fill="none" stroke="#4ADE80" stroke-width="6"/>
+
+          <circle id="br-d1" cx="283" cy="84" r="22" fill="#9A3412" stroke="#FDBA74" stroke-width="3"/>
+          <text x="283" y="91" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">1</tspan></text>
+          <circle id="br-d4" cx="177" cy="84" r="22" fill="#1E293B" stroke="#64748B" stroke-width="3"/>
+          <text x="177" y="91" text-anchor="middle" fill="#CBD5E1" font-size="19" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">4</tspan></text>
+          <circle id="br-d2" cx="283" cy="186" r="22" fill="#1E293B" stroke="#64748B" stroke-width="3"/>
+          <text x="283" y="193" text-anchor="middle" fill="#CBD5E1" font-size="19" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">2</tspan></text>
+          <circle id="br-d3" cx="177" cy="186" r="22" fill="#9A3412" stroke="#FDBA74" stroke-width="3"/>
+          <text x="177" y="193" text-anchor="middle" fill="#FFFFFF" font-size="19" font-weight="900">D<tspan baseline-shift="sub" font-size="75%">3</tspan></text>
+
+          <rect x="464" y="144" width="42" height="52" rx="8" fill="#FFF7ED" stroke="#EA580C" stroke-width="3.5"/>
+          <text x="485" y="177" text-anchor="middle" fill="#9A3412" font-size="23" font-weight="900" font-style="italic">R</text>
+          <text x="532" y="176" text-anchor="middle" fill="#FDE047" font-size="22" font-weight="900">⬇ <tspan font-style="italic">I</tspan></text>
+        </svg>
+      </div>
+
+      <div class="col-stack">
+        <div class="card accent-orange anim-right d-2" style="padding:18px 24px;">
+          <h3 style="color:var(--orange-deep);">Đường đi dòng điện</h3>
+          <ul class="clean-list">
+            <li><strong>Nửa 1:</strong> (1) ➔ D<sub>1</sub> ➔ (2) ➔ <strong><i>R</i></strong> ➔ (4) ➔ D<sub>3</sub> ➔ (3).</li>
+            <li><strong>Nửa 2:</strong> (3) ➔ D<sub>2</sub> ➔ (2) ➔ <strong><i>R</i></strong> ➔ (4) ➔ D<sub>4</sub> ➔ (1).</li>
+          </ul>
+        </div>
+
+        <div class="lab-card anim-up d-3" style="padding:16px 22px;">
+          <div style="font-family:var(--font-mono);font-size:19px;font-weight:800;color:#86EFAC;margin-bottom:4px;">
+            SÓNG RA CẢ CHU KÌ (<i>f'</i> = 2<i>f</i> = 100 Hz)
+          </div>
+          <svg viewBox="0 0 460 115" width="100%" height="105" preserveAspectRatio="xMidYMid meet">
+            <line x1="15" y1="92" x2="445" y2="92" stroke="#64748B" stroke-width="2" stroke-dasharray="4 4"/>
+            <path class="animated-wave" d="M 15 92 Q 65 20 115 92 Q 165 20 215 92 Q 265 20 315 92 Q 365 20 415 92" fill="none" stroke="#4ADE80" stroke-width="5.5"/>
+            <text x="65" y="40" text-anchor="middle" fill="#FDE047" font-size="16" font-weight="900">D₁, D₃</text>
+            <text x="165" y="40" text-anchor="middle" fill="#86EFAC" font-size="16" font-weight="900">D₂, D₄</text>
+            <text x="265" y="40" text-anchor="middle" fill="#FDE047" font-size="16" font-weight="900">D₁, D₃</text>
+            <text x="365" y="40" text-anchor="middle" fill="#86EFAC" font-size="16" font-weight="900">D₂, D₄</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Hình 4.10 SGK: Nửa chu kì âm được lật ngược lên thành nửa dương, tạo dòng DC liên tục.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 10: SO SÁNH 2 PHƯƠNG PHÁP CHỈNH LƯU
+       ========================================================================= -->
+  <section class="slide" data-fx="slide3d">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-blue">TỔNG HỢP ĐỐI CHIẾU</div>
+        <h2>So sánh Chỉnh lưu nửa chu kì và Cả chu kì</h2>
+      </div>
+    </div>
+
+    <div class="slide-body anim-zoom d-2" style="grid-template-columns:1fr;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:28%;">Tiêu chí</th>
+              <th style="width:36%;color:#7DD3FC;">Chỉnh lưu nửa chu kì</th>
+              <th style="width:36%;color:#FBBF24;">Chỉnh lưu cả chu kì (Cầu)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background:#F8FAFC;">
+              <td style="font-weight:800;">Số Diode</td>
+              <td><strong>1 Diode</strong> nối tiếp tải <i>R</i></td>
+              <td style="font-weight:900;color:var(--orange-deep);">4 Diode mắc thành cầu</td>
+            </tr>
+            <tr>
+              <td style="font-weight:800;">Nửa chu kì dương</td>
+              <td>Diode D dẫn qua <i>R</i></td>
+              <td>Cặp <strong>D<sub>1</sub> – D<sub>3</sub></strong> dẫn qua <i>R</i></td>
+            </tr>
+            <tr style="background:#F8FAFC;">
+              <td style="font-weight:800;">Nửa chu kì âm</td>
+              <td style="font-weight:800;color:var(--red-deep);">Bị chặn (<i>u</i><sub>R</sub> = 0)</td>
+              <td style="font-weight:800;color:var(--green-deep);">Cặp <strong>D<sub>2</sub> – D<sub>4</sub></strong> đảo thành dương</td>
+            </tr>
+            <tr>
+              <td style="font-weight:800;">Tần số xung ra</td>
+              <td><i>f'</i> = <i>f</i> = <strong>50 Hz</strong></td>
+              <td style="font-weight:900;color:var(--orange-deep);"><i>f'</i> = 2<i>f</i> = <strong>100 Hz</strong></td>
+            </tr>
+            <tr style="background:#FFF7ED;">
+              <td style="font-weight:800;">Chất lượng DC</td>
+              <td>Ngắt quãng, hiệu suất thấp</td>
+              <td style="font-weight:900;color:var(--blue-deep);">Liên tục, công suất cao</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-3">
+      <span>Thực tế: Hầu hết các bộ nguồn điện tử hiện đại đều dùng mạch cầu chỉnh lưu 4 Diode.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 11: III. LỌC PHẲNG BẰNG TỤ ĐIỆN & BỘ SẠC THỰC TẾ
+       ========================================================================= -->
+  <section class="slide" data-fx="flip">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-green">III. EM CÓ BIẾT &amp; ỨNG DỤNG • HÌNH 4.11 SGK</div>
+        <h2>Làm phẳng bằng Tụ điện C &amp; Bộ sạc thực tế</h2>
+      </div>
+    </div>
+
+    <div class="slide-body" style="grid-template-rows:1fr auto;gap:20px;">
+      <div class="slide-body grid-2">
+        <div class="lab-card anim-left d-2">
+          <div style="font-family:var(--font-mono);font-size:20px;font-weight:800;color:#86EFAC;text-align:center;">
+            HÌNH 4.11: MẮC TỤ LỌC C SONG SONG TẢI R
+          </div>
+          <svg viewBox="0 0 500 220" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+            <line x1="30" y1="185" x2="470" y2="185" stroke="#64748B" stroke-width="2.5"/>
+            <line x1="30" y1="20" x2="30" y2="195" stroke="#64748B" stroke-width="2.5"/>
+            <path d="M 30 185 Q 80 35 130 185 Q 180 35 230 185 Q 280 35 330 185 Q 380 35 430 185" fill="none" stroke="#64748B" stroke-width="3" stroke-dasharray="6 6"/>
+            <path class="animated-wave" d="M 30 185 Q 56 62 80 60 L 160 84 Q 173 62 180 60 L 260 84 Q 273 62 280 60 L 360 84 Q 373 62 380 60 L 450 80" fill="none" stroke="#4ADE80" stroke-width="6"/>
+            <text x="160" y="42" text-anchor="middle" fill="#FDE047" font-size="19" font-weight="900">Tụ nạp đỉnh ➔ Phóng nuôi tải R</text>
+            <text x="250" y="212" text-anchor="middle" fill="#86EFAC" font-size="19" font-weight="900">Đường xanh: Điện áp DC phẳng hơn</text>
+          </svg>
+        </div>
+
+        <div class="card accent-green anim-right d-2">
+          <h3 style="color:var(--green-deep);">Cơ chế lọc phẳng của Tụ điện C</h3>
+          <ul class="clean-list">
+            <li>Mắc <strong>tụ điện C</strong> song song tải <i>R</i> sau cầu chỉnh lưu.</li>
+            <li>Điện áp tăng ➔ <strong>tụ tích điện</strong>; điện áp giảm ➔ <strong>tụ phóng qua <i>R</i></strong> làm đường điện áp phẳng hơn.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="lab-card anim-up d-3" style="padding:14px 24px;">
+        <svg viewBox="0 0 1180 100" width="100%" height="96" preserveAspectRatio="xMidYMid meet">
+          <rect x="10" y="10" width="230" height="80" rx="14" fill="#1E293B" stroke="#38BDF8" stroke-width="2.5"/>
+          <text x="125" y="44" text-anchor="middle" fill="#7DD3FC" font-size="21" font-weight="900">ĐIỆN LƯỚI AC</text>
+          <text x="125" y="74" text-anchor="middle" fill="#F8FAFC" font-size="19" font-weight="800">220 V – 50 Hz</text>
+
+          <line x1="248" y1="50" x2="294" y2="50" stroke="#38BDF8" stroke-width="4.5"/>
+          <polygon points="294,41 312,50 294,59" fill="#38BDF8"/>
+
+          <rect x="315" y="10" width="230" height="80" rx="14" fill="#075985" stroke="#7DD3FC" stroke-width="2.5"/>
+          <text x="430" y="44" text-anchor="middle" fill="#FFFFFF" font-size="21" font-weight="900">BIẾN ÁP HẠ ÁP</text>
+          <text x="430" y="74" text-anchor="middle" fill="#E0F2FE" font-size="19" font-weight="800">Hạ xuống 9 V AC</text>
+
+          <line x1="553" y1="50" x2="599" y2="50" stroke="#FBBF24" stroke-width="4.5"/>
+          <polygon points="599,41 617,50 599,59" fill="#FBBF24"/>
+
+          <rect x="620" y="10" width="230" height="80" rx="14" fill="#9A3412" stroke="#FDBA74" stroke-width="2.5"/>
+          <text x="735" y="44" text-anchor="middle" fill="#FFFFFF" font-size="21" font-weight="900">CẦU 4 DIODE</text>
+          <text x="735" y="74" text-anchor="middle" fill="#FFEDD5" font-size="19" font-weight="800">Chỉnh lưu cả chu kì</text>
+
+          <line x1="858" y1="50" x2="904" y2="50" stroke="#4ADE80" stroke-width="4.5"/>
+          <polygon points="904,41 922,50 904,59" fill="#4ADE80"/>
+
+          <rect x="925" y="10" width="245" height="80" rx="14" fill="#166534" stroke="#86EFAC" stroke-width="2.5"/>
+          <text x="1047" y="44" text-anchor="middle" fill="#FFFFFF" font-size="21" font-weight="900">TỤ LỌC C &amp; ỔN ÁP</text>
+          <text x="1047" y="74" text-anchor="middle" fill="#FDE047" font-size="20" font-weight="900">Ra 5 V DC phẳng</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Đây chính là cấu trúc cốt lõi bên trong mọi củ sạc điện thoại và bộ nguồn adapter.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 12: VÍ DỤ VẬN DỤNG & GHI NHỚ CỐT LÕI
+       ========================================================================= -->
+  <section class="slide" data-fx="glide">
+    <div class="slide-header anim-up d-1">
+      <div>
+        <div class="badge badge-orange">IV. VẬN DỤNG &amp; TỔNG KẾT</div>
+        <h2>Ví dụ tính nhanh &amp; Ghi nhớ cốt lõi</h2>
+      </div>
+    </div>
+
+    <div class="slide-body grid-2">
+      <div class="card top-blue anim-left d-2" style="justify-content:space-between;">
+        <div>
+          <h3 style="color:var(--blue-deep);">Ví dụ vận dụng nhanh</h3>
+          <p style="margin-bottom:14px;">
+            Đặt điện áp <i>u</i> = 12√2 cos(100π<i>t</i>) (V) vào mạch cầu 4 Diode nối tải <i>R</i>. Tính tần số và chu kì xung đầu ra.
+          </p>
+        </div>
+        <div style="background:#0F172A;color:#F8FAFC;border-radius:16px;padding:20px 24px;font-size:25px;line-height:1.5;">
+          <strong style="color:#7DD3FC;">Giải từng bước:</strong><br>
+          1. Tần số nguồn AC: <i>f</i> = 100π / (2π) = <strong>50 Hz</strong><br>
+          2. Mạch cầu chỉnh lưu cả chu kì:<br>
+          &nbsp;&nbsp;&nbsp;• Tần số ra: <i>f'</i> = 2<i>f</i> = <strong style="color:#4ADE80;">100 Hz</strong><br>
+          &nbsp;&nbsp;&nbsp;• Chu kì ra: <i>T'</i> = 1 / <i>f'</i> = <strong style="color:#FBBF24;">0,01 s</strong>
+        </div>
+      </div>
+
+      <div class="col-stack">
+        <div class="card accent-green anim-right d-2">
+          <h3 style="color:var(--green-deep);">3 Ý cốt lõi (Em đã học)</h3>
+          <ul class="clean-list">
+            <li><strong>Diode:</strong> Chỉ dẫn điện theo 1 chiều <strong>A ➔ K</strong>.</li>
+            <li><strong>Nửa chu kì:</strong> 1 Diode, dòng ngắt quãng (<i>f'</i> = <i>f</i>).</li>
+            <li><strong>Cả chu kì:</strong> Cầu 4 Diode, dòng liên tục (<i>f'</i> = 2<i>f</i>).</li>
+          </ul>
+        </div>
+
+        <div class="formula-box anim-zoom d-3">
+          Nửa chu kì: <i>f'</i> = <i>f</i> &nbsp;|&nbsp; Cả chu kì: <i>f'</i> = 2<i>f</i>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar anim-up d-4">
+      <span>Gắn thêm tụ điện C song song tải R giúp điện áp một chiều phẳng hơn, an toàn cho thiết bị.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 13: TRẮC NGHIỆM CÂU 1
+       ========================================================================= -->
+  <section class="slide slide-dark" data-fx="zoom">
+    <div class="slide-header anim-up d-1" style="border-bottom-color:rgba(56,189,248,0.3);">
+      <div>
+        <div class="badge badge-glow">TRẮC NGHIỆM LỚP HỌC • CÂU 1 / 3</div>
+        <h2>Kiểm tra kiến thức Diode bán dẫn</h2>
+      </div>
+    </div>
+
+    <div class="slide-body anim-zoom d-2" style="grid-template-columns:1fr;">
+      <div class="quiz-box">
+        <div class="quiz-q">
+          Câu 1: Khi mắc Diode phân cực thuận vào nguồn một chiều, dòng điện chạy qua Diode theo chiều nào và đèn có sáng không?
+        </div>
+        <div class="quiz-grid">
+          <button class="quiz-opt" onclick="answerQuiz(0, 0, this)"><span class="quiz-letter">A</span><span>Từ K sang A, đèn sáng</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(0, 1, this)"><span class="quiz-letter">B</span><span>Từ A sang K, đèn sáng</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(0, 2, this)"><span class="quiz-letter">C</span><span>Theo cả 2 chiều, đèn nháy</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(0, 3, this)"><span class="quiz-letter">D</span><span>Bị chặn (<i>I</i> = 0), đèn tắt</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar note-bar-dark anim-up d-3" id="fb-0">
+      <span>Chọn 1 đáp án! Chọn sai sẽ khóa phương án đó để bạn khác trả lời tiếp.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 14: TRẮC NGHIỆM CÂU 2
+       ========================================================================= -->
+  <section class="slide slide-dark" data-fx="slide3d">
+    <div class="slide-header anim-up d-1" style="border-bottom-color:rgba(56,189,248,0.3);">
+      <div>
+        <div class="badge badge-glow">TRẮC NGHIỆM LỚP HỌC • CÂU 2 / 3</div>
+        <h2>Kiểm tra nguyên lí mạch cầu 4 Diode</h2>
+      </div>
+    </div>
+
+    <div class="slide-body anim-zoom d-2" style="grid-template-columns:1fr;">
+      <div class="quiz-box">
+        <div class="quiz-q">
+          Câu 2: Trong mạch cầu chỉnh lưu cả chu kì (4 Diode), ở mỗi nửa chu kì của dòng xoay chiều có mấy Diode cùng dẫn điện qua tải <i>R</i>?
+        </div>
+        <div class="quiz-grid">
+          <button class="quiz-opt" onclick="answerQuiz(1, 0, this)"><span class="quiz-letter">A</span><span>Chỉ 1 Diode dẫn điện</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(1, 1, this)"><span class="quiz-letter">B</span><span>Cả 4 Diode cùng dẫn điện</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(1, 2, this)"><span class="quiz-letter">C</span><span>2 Diode đối diện cùng dẫn</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(1, 3, this)"><span class="quiz-letter">D</span><span>3 Diode dẫn, 1 Diode khóa</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar note-bar-dark anim-up d-3" id="fb-1">
+      <span>Chọn 1 đáp án! Chọn sai sẽ khóa phương án đó để bạn khác trả lời tiếp.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 15: TRẮC NGHIỆM CÂU 3
+       ========================================================================= -->
+  <section class="slide slide-dark" data-fx="flip">
+    <div class="slide-header anim-up d-1" style="border-bottom-color:rgba(56,189,248,0.3);">
+      <div>
+        <div class="badge badge-glow">TRẮC NGHIỆM LỚP HỌC • CÂU 3 / 3</div>
+        <h2>Kiểm tra tính toán &amp; lọc phẳng nguồn</h2>
+      </div>
+    </div>
+
+    <div class="slide-body anim-zoom d-2" style="grid-template-columns:1fr;">
+      <div class="quiz-box">
+        <div class="quiz-q">
+          Câu 3: Nguồn xoay chiều 50 Hz qua mạch cầu 4 Diode, rồi mắc thêm tụ lọc <i>C</i> song song tải <i>R</i>. Tần số xung trước khi lọc và vai trò tụ <i>C</i> là gì?
+        </div>
+        <div class="quiz-grid">
+          <button class="quiz-opt" onclick="answerQuiz(2, 0, this)"><span class="quiz-letter">A</span><span>100 Hz; tụ <i>C</i> làm phẳng điện áp</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(2, 1, this)"><span class="quiz-letter">B</span><span>50 Hz; tụ <i>C</i> tăng gấp đôi áp</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(2, 2, this)"><span class="quiz-letter">C</span><span>100 Hz; tụ <i>C</i> đổi DC thành AC</span></button>
+          <button class="quiz-opt" onclick="answerQuiz(2, 3, this)"><span class="quiz-letter">D</span><span>25 Hz; tụ <i>C</i> ngắt quá tải</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-bar note-bar-dark anim-up d-3" id="fb-2">
+      <span>Chọn 1 đáp án! Chọn sai sẽ khóa phương án đó để bạn khác trả lời tiếp.</span>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       SLIDE 16: TRANG CẢM ƠN & ĂN MỪNG
+       ========================================================================= -->
+  <section class="slide slide-dark" data-fx="zoom" style="grid-template-rows:1fr;align-items:center;justify-items:center;text-align:center;">
+    <div class="anim-zoom d-1" style="display:flex;flex-direction:column;align-items:center;gap:24px;max-width:1080px;">
+      <div class="trophy-glow" style="width:112px;height:112px;border-radius:999px;background:linear-gradient(135deg,#F59E0B,#D97706);border:4px solid #FEF08A;display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 64 64" width="60" height="60" fill="#FFFFFF">
+          <path d="M18 10h28v14c0 8.8-6.3 16.2-14 17.7V48h10v6H22v-6h10v-6.3C24.3 40.2 18 32.8 18 24V10zm-8 4h6v10c0 2.5.4 4.9 1.2 7.1C12.2 29.8 9 25.3 9 20v-6h1zm44 0h-6v10c0 2.5-.4 4.9-1.2 7.1 5-1.3 8.2-5.8 8.2-11.1v-6h-1z"/>
+        </svg>
+      </div>
+
+      <div class="badge badge-glow">HOÀN THÀNH CHUYÊN ĐỀ 1 • BÀI 4</div>
+
+      <h1 style="font-size:64px;text-shadow:0 6px 26px rgba(56,189,248,0.45);">
+        Cảm ơn Thầy Cô và các bạn đã lắng nghe!
+      </h1>
+
+      <p style="font-size:28px;color:#CBD5E1;max-width:900px;">
+        Chúc Thầy Cô sức khỏe và chúc các bạn học tốt môn <strong>Vật lí 12 – Kết nối tri thức với cuộc sống</strong>!
+      </p>
+
+      <div style="display:flex;gap:18px;margin-top:8px;">
+        <button class="lab-btn active" onclick="triggerFinale()">Bắn pháo hoa ăn mừng</button>
+        <button class="lab-btn" onclick="goToSlide(0)">Về trang đầu</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  function resizeStage() {
+    const stage = document.getElementById('stage');
+    const scale = Math.min(window.innerWidth / 1600, window.innerHeight / 900);
+    stage.style.transform = `scale(${scale})`;
+  }
+  window.addEventListener('resize', resizeStage);
+  resizeStage();
+
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const counterEl = document.getElementById('page-counter');
+  const progressFill = document.getElementById('progress-fill');
+  let curIdx = 0;
+  let finaleTimer = null;
+
+  function playWhoosh() {
+    try {
+      const ctx = getCtx(), now = ctx.currentTime;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(240, now);
+      osc.frequency.exponentialRampToValueAtTime(480, now + 0.08);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.04, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.09);
+    } catch (e) {}
+  }
+
+  function goToSlide(idx, withSound = true) {
+    if (idx < 0 || idx >= slides.length) return;
+    curIdx = idx;
+
+    slides.forEach((s, i) => {
+      s.classList.remove('active', 'prev-slide', 'next-slide');
+      if (i === curIdx) s.classList.add('active');
+      else if (i < curIdx) s.classList.add('prev-slide');
+      else s.classList.add('next-slide');
+    });
+
+    counterEl.textContent = `${String(curIdx + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+    progressFill.style.width = `${((curIdx + 1) / slides.length) * 100}%`;
+
+    if (curIdx === slides.length - 1) {
+      triggerFinale();
+      if (!finaleTimer) {
+        finaleTimer = setInterval(() => {
+          if (curIdx === slides.length - 1) spawnFirework();
+        }, 1100);
+      }
+    } else if (withSound) {
+      playWhoosh();
+    }
+  }
+
+  function nextSlide() { if (curIdx < slides.length - 1) goToSlide(curIdx + 1); }
+  function prevSlide() { if (curIdx > 0) goToSlide(curIdx - 1); }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); nextSlide();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); prevSlide();
+    } else if (e.key === 'Home') {
+      e.preventDefault(); goToSlide(0);
+    } else if (e.key === 'End') {
+      e.preventDefault(); goToSlide(slides.length - 1);
+    }
+  });
+
+  let wheelLock = false;
+  window.addEventListener('wheel', (e) => {
+    if (wheelLock || Math.abs(e.deltaY) < 20) return;
+    wheelLock = true;
+    if (e.deltaY > 0) nextSlide(); else prevSlide();
+    setTimeout(() => { wheelLock = false; }, 550);
+  }, { passive: true });
+
+  document.getElementById('stage').addEventListener('click', (e) => {
+    if (e.target.closest('button, .card, .lab-card, .quiz-box')) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    if (ratio < 0.22) prevSlide();
+    else if (ratio > 0.78) nextSlide();
+  });
+
+  function setBiasMode(isForward) {
+    const b1 = document.getElementById('btn-bias-fwd');
+    const b2 = document.getElementById('btn-bias-rev');
+    const flow = document.getElementById('bias-flow');
+    const title = document.getElementById('bias-title');
+    const pill = document.getElementById('bias-pill');
+    const tri = document.getElementById('bias-tri');
+    const bulbG = document.getElementById('bias-bulb-g');
+    const bulbC = document.getElementById('bias-bulb-c');
+    const msgF = document.getElementById('bias-msg-fwd');
+    const msgR = document.getElementById('bias-msg-rev');
+    const box = document.getElementById('bias-box');
+    const pTop = document.getElementById('bias-pole-top');
+    const pBot = document.getElementById('bias-pole-bot');
+
+    if (isForward) {
+      b1.classList.add('active-green'); b2.classList.remove('active');
+      flow.style.display = 'block';
+      title.textContent = 'PHÂN CỰC THUẬN: A NỐI (+), K NỐI (–)';
+      title.style.color = '#4ADE80';
+      pill.textContent = 'ĐÈN SÁNG';
+      pill.style.background = '#166534'; pill.style.color = '#DCFCE7';
+      tri.setAttribute('fill', '#4ADE80');
+      bulbG.classList.add('glow-bulb');
+      bulbC.setAttribute('fill', '#FACC15'); bulbC.setAttribute('stroke', '#FEF08A');
+      msgF.style.display = 'block'; msgR.style.display = 'none';
+      box.setAttribute('stroke', '#4ADE80');
+      pTop.textContent = '+'; pTop.setAttribute('fill', '#FBBF24');
+      pBot.textContent = '–'; pBot.setAttribute('fill', '#38BDF8');
+    } else {
+      b2.classList.add('active'); b1.classList.remove('active-green');
+      flow.style.display = 'none';
+      title.textContent = 'PHÂN CỰC NGƯỢC: A NỐI (–), K NỐI (+)';
+      title.style.color = '#FCA5A5';
+      pill.textContent = 'ĐÈN TẮT';
+      pill.style.background = '#991B1B'; pill.style.color = '#FEE2E2';
+      tri.setAttribute('fill', '#EF4444');
+      bulbG.classList.remove('glow-bulb');
+      bulbC.setAttribute('fill', '#1E293B'); bulbC.setAttribute('stroke', '#64748B');
+      msgF.style.display = 'none'; msgR.style.display = 'block';
+      box.setAttribute('stroke', '#F87171');
+      pTop.textContent = '–'; pTop.setAttribute('fill', '#38BDF8');
+      pBot.textContent = '+'; pBot.setAttribute('fill', '#FBBF24');
+    }
+  }
+
+  function setHalfCycle(c) {
+    const b1 = document.getElementById('btn-half-1');
+    const b2 = document.getElementById('btn-half-2');
+    const flow = document.getElementById('half-flow');
+    const diode = document.getElementById('half-diode');
+    const msg = document.getElementById('half-msg');
+    const title = document.getElementById('half-title');
+    const p1 = document.getElementById('half-p1');
+    const p2 = document.getElementById('half-p2');
+
+    if (c === 1) {
+      b1.classList.add('active-green'); b2.classList.remove('active');
+      flow.style.display = 'block';
+      diode.setAttribute('fill', '#4ADE80');
+      msg.textContent = 'Có dòng điện chạy qua tải R';
+      msg.setAttribute('fill', '#86EFAC');
+      title.textContent = 'NỬA CHU KÌ DƯƠNG: DIODE PHÂN CỰC THUẬN';
+      title.style.color = '#4ADE80';
+      p1.textContent = '+'; p1.setAttribute('fill', '#FBBF24');
+      p2.textContent = '–'; p2.setAttribute('fill', '#38BDF8');
+    } else {
+      b2.classList.add('active'); b1.classList.remove('active-green');
+      flow.style.display = 'none';
+      diode.setAttribute('fill', '#EF4444');
+      msg.textContent = 'Diode khóa ➔ Dòng qua R = 0';
+      msg.setAttribute('fill', '#FCA5A5');
+      title.textContent = 'NỬA CHU KÌ ÂM: DIODE PHÂN CỰC NGƯỢC';
+      title.style.color = '#FCA5A5';
+      p1.textContent = '–'; p1.setAttribute('fill', '#38BDF8');
+      p2.textContent = '+'; p2.setAttribute('fill', '#FBBF24');
+    }
+  }
+
+  function setBridgeCycle(c) {
+    const b1 = document.getElementById('btn-br-1');
+    const b2 = document.getElementById('btn-br-2');
+    const f1 = document.getElementById('br-flow-1');
+    const f2 = document.getElementById('br-flow-2');
+    const d1 = document.getElementById('br-d1');
+    const d2 = document.getElementById('br-d2');
+    const d3 = document.getElementById('br-d3');
+    const d4 = document.getElementById('br-d4');
+    const s1 = document.getElementById('br-s1');
+    const s2 = document.getElementById('br-s2');
+    const title = document.getElementById('br-title');
+
+    if (c === 1) {
+      b1.classList.add('active'); b2.classList.remove('active-green');
+      f1.style.display = 'block'; f2.style.display = 'none';
+      d1.setAttribute('fill', '#9A3412'); d3.setAttribute('fill', '#9A3412');
+      d2.setAttribute('fill', '#1E293B'); d4.setAttribute('fill', '#1E293B');
+      s1.textContent = '+'; s1.setAttribute('fill', '#FBBF24');
+      s2.textContent = '–'; s2.setAttribute('fill', '#38BDF8');
+      title.textContent = 'NỬA CHU KÌ 1: (1)+ • (3)– ➔ D₁ & D₃ DẪN';
+      title.style.color = '#FBBF24';
+    } else {
+      b2.classList.add('active-green'); b1.classList.remove('active');
+      f1.style.display = 'none'; f2.style.display = 'block';
+      d1.setAttribute('fill', '#1E293B'); d3.setAttribute('fill', '#1E293B');
+      d2.setAttribute('fill', '#166534'); d4.setAttribute('fill', '#166534');
+      s1.textContent = '–'; s1.setAttribute('fill', '#38BDF8');
+      s2.textContent = '+'; s2.setAttribute('fill', '#4ADE80');
+      title.textContent = 'NỬA CHU KÌ 2: (3)+ • (1)– ➔ D₂ & D₄ DẪN';
+      title.style.color = '#4ADE80';
+    }
+  }
+
+  let audioCtx = null;
+  function getCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playWinSound() {
+    try {
+      const ctx = getCtx(), now = ctx.currentTime;
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + i * 0.1);
+        gain.gain.setValueAtTime(0.001, now + i * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.24, now + i * 0.1 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.42);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(now + i * 0.1); osc.stop(now + i * 0.1 + 0.44);
+      });
+    } catch (e) {}
+  }
+
+  function playWrongSound() {
+    try {
+      const ctx = getCtx(), now = ctx.currentTime;
+      [329.63, 293.66, 277.18].forEach((freq, i) => {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now + i * 0.18);
+        gain.gain.setValueAtTime(0.001, now + i * 0.18);
+        gain.gain.linearRampToValueAtTime(0.14, now + i * 0.18 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.18 + 0.25);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(now + i * 0.18); osc.stop(now + i * 0.18 + 0.26);
+      });
+    } catch (e) {}
+  }
+
+  const quizAnswers = [
+    { correct: 1, exp: 'Khi phân cực thuận (A nối +, K nối –), dòng điện đi từ A sang K làm đèn sáng.' },
+    { correct: 2, exp: 'Nửa chu kì 1 có cặp D₁ – D₃ dẫn, nửa chu kì 2 có cặp D₂ – D₄ dẫn.' },
+    { correct: 0, exp: 'Mạch cầu cho xung 2f = 100 Hz; tụ lọc C tích – phóng giúp làm phẳng điện áp ra.' }
+  ];
+
+  function answerQuiz(qIdx, optIdx, btn) {
+    const q = quizAnswers[qIdx];
+    const fb = document.getElementById(`fb-${qIdx}`);
+    const parent = btn.closest('.quiz-grid');
+
+    if (optIdx === q.correct) {
+      btn.classList.add('correct');
+      parent.querySelectorAll('.quiz-opt').forEach(b => b.disabled = true);
+      fb.style.borderColor = '#34D399';
+      fb.style.background = '#064E3B';
+      fb.innerHTML = `<span style="color:#ECFDF5;"><strong>CHÍNH XÁC!</strong> ${q.exp}</span>`;
+      playWinSound();
+      spawnConfettiAt(btn);
+    } else {
+      btn.classList.add('wrong');
+      btn.disabled = true;
+      fb.style.borderColor = '#F87171';
+      fb.style.background = '#7F1D1D';
+      fb.innerHTML = `<span style="color:#FEF2F2;"><strong>Chưa chính xác!</strong> Mời bạn khác chọn lại phương án khác!</span>`;
+      playWrongSound();
+    }
+  }
+
+  const canvas = document.getElementById('fx-canvas');
+  const ctx2d = canvas.getContext('2d');
+  let particles = [];
+  let fxRunning = false;
+
+  function spawnConfettiAt(el) {
+    canvas.width = 1600; canvas.height = 900;
+    const stageRect = document.getElementById('stage').getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    const scale = stageRect.width / 1600;
+    const cx = (rect.left + rect.width / 2 - stageRect.left) / scale;
+    const cy = (rect.top + rect.height / 2 - stageRect.top) / scale;
+    const colors = ['#38BDF8', '#FBBF24', '#4ADE80', '#FB923C', '#F472B6'];
+
+    for (let i = 0; i < 65; i++) {
+      particles.push({
+        x: cx, y: cy,
+        vx: (Math.random() - 0.5) * 18,
+        vy: -Math.random() * 14 - 4,
+        size: Math.random() * 10 + 6,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        alpha: 1, gravity: 0.36
+      });
+    }
+    startFxLoop();
+  }
+
+  function spawnFirework() {
+    canvas.width = 1600; canvas.height = 900;
+    const cx = 250 + Math.random() * 1100;
+    const cy = 140 + Math.random() * 400;
+    const colors = ['#FDE047', '#38BDF8', '#4ADE80', '#FB923C', '#F472B6', '#FFFFFF'];
+    for (let i = 0; i < 60; i++) {
+      const ang = (Math.PI * 2 * i) / 60 + (Math.random() - 0.5) * 0.2;
+      const spd = 3 + Math.random() * 9;
+      particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        size: Math.random() * 6 + 3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        alpha: 1, gravity: 0.14
+      });
+    }
+    startFxLoop();
+  }
+
+  function triggerFinale() {
+    playWinSound();
+    spawnFirework();
+    setTimeout(spawnFirework, 220);
+    setTimeout(spawnFirework, 450);
+  }
+
+  function startFxLoop() {
+    if (fxRunning) return;
+    fxRunning = true;
+    requestAnimationFrame(function loop() {
+      ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+      particles = particles.filter(p => p.alpha > 0.03);
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.alpha -= 0.015;
+        ctx2d.save();
+        ctx2d.globalAlpha = Math.max(0, p.alpha);
+        ctx2d.fillStyle = p.color;
+        ctx2d.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size * 0.7);
+        ctx2d.restore();
+      });
+      if (particles.length > 0) requestAnimationFrame(loop);
+      else { fxRunning = false; ctx2d.clearRect(0, 0, canvas.width, canvas.height); }
+    });
+  }
+
+  // Khởi tạo trạng thái ban đầu cho slide 0
+  goToSlide(0, false);
+</script>
+</body>
+</html>
