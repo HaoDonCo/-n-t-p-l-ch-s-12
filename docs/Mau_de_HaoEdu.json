@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-11-17",
+  "exams": [
+    {
+      "id": "MAU-KY-THUAT-01",
+      "subject": "physics",
+      "title": "MẪU KỸ THUẬT – chưa phải đề thi",
+      "description": "Mẫu điền dữ liệu. Không đưa lên kho đề chính nếu chưa biên soạn và duyệt nội dung.",
+      "mode": "exam",
+      "minutes": 45,
+      "active": false,
+      "draft": true,
+      "verified": false,
+      "source": "Mẫu minh họa do HaoEdu biên soạn, không phải đáp án chính thức.",
+      "sectionPoints": {
+        "mc": 3,
+        "tf": 2,
+        "short": 2,
+        "essay": 3
+      },
+      "mc": [
+        {
+          "q": "Nhiệt độ 27 °C tương ứng gần đúng với nhiệt độ nào theo kelvin? (Lấy T = t + 273.)",
+          "options": [
+            "273 K",
+            "300 K",
+            "310 K",
+            "327 K"
+          ],
+          "key": "B",
+          "explain": "27 + 273 = 300 K."
+        }
+      ],
+      "tf": [
+        {
+          "passage": "Một vật ở nhiệt độ 20 °C được làm nóng lên đến 30 °C.",
+          "claims": [
+            {
+              "t": "Nhiệt độ của vật tăng 10 °C.",
+              "key": true
+            },
+            {
+              "t": "Độ tăng nhiệt độ bằng 10 K.",
+              "key": true
+            },
+            {
+              "t": "Nhiệt độ cuối bằng 303 K nếu lấy T = t + 273.",
+              "key": true
+            },
+            {
+              "t": "Nhiệt độ cuối thấp hơn nhiệt độ ban đầu.",
+              "key": false
+            }
+          ]
+        }
+      ],
+      "short": [
+        {
+          "q": "Đun 0,5 kg nước tăng thêm 10 °C; c = 4200 J/(kg·K). Tính nhiệt lượng (kJ).",
+          "key": 21,
+          "unit": "kJ",
+          "tol": 0.01,
+          "hint": "Q = mcΔT = 21000 J."
+        }
+      ],
+      "essay": [
+        {
+          "title": "Bài toán kiểm tra đáp số",
+          "prompt": "Một nguồn nhiệt truyền 8400 J vào 0,2 kg nước, bỏ qua hao phí; c = 4200 J/(kg·K).",
+          "parts": [
+            {
+              "q": "Độ tăng nhiệt độ là bao nhiêu °C?",
+              "key": 10,
+              "unit": "°C",
+              "tol": 0.01,
+              "points": 3
+            }
+          ],
+          "solution": "ΔT = Q/(mc) = 8400/(0,2×4200) = 10 °C."
+        }
+      ]
+    }
+  ]
+}
